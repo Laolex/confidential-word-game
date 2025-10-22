@@ -29,7 +29,131 @@ A fully homomorphic encrypted (FHE) word guessing game built on Zama's fhEVM. Pl
 - Node.js >= 18.0.0
 - npm or yarn
 - MetaMask or compatible Web3 wallet
-- Access to fhEVM network (Zama devnet/testnet)
+- Access to fhEVM network (Zama devnet/testnet) OR Docker for local development
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+The project uses environment variables for configuration. Copy `.env.example` to `.env` and configure:
+
+```bash
+cp .env.example .env
+```
+
+**Required Variables:**
+
+- `PRIVATE_KEY` - Your deployer wallet private key (for production)
+  - **NEVER commit real private keys to git!**
+  - Use a dedicated deployment wallet with minimal funds
+
+- `MNEMONIC` - Alternative to PRIVATE_KEY for local development
+  - Default: `test test test test test test test test test test test junk`
+  - Safe for local testing, DO NOT use in production
+
+**Network Configuration:**
+
+- `SEPOLIA_RPC_URL` - Ethereum Sepolia testnet RPC endpoint
+  - Example: `https://rpc.sepolia.org`
+  - Used for non-FHE testing
+
+- `ZAMA_DEVNET_RPC_URL` - Zama fhEVM devnet RPC endpoint
+  - Example: `https://devnet.zama.ai`
+  - Used for FHE-enabled testing and development
+
+- `GATEWAY_URL` - FHE Gateway decryption service URL
+  - Example: `https://gateway.devnet.zama.ai`
+  - Required for real FHE operations
+  - Omit or leave empty for mock mode (local testing)
+
+**Optional Variables:**
+
+- `GAME_CONTRACT_ADDRESS` - Deployed contract address (set after deployment)
+- `ETHERSCAN_API_KEY` - For contract verification on Etherscan
+- `COINMARKETCAP_API_KEY` - For gas price reporting in USD
+- `REPORT_GAS` - Set to `true` to enable gas reporting in tests
+
+### Mock Mode vs Real fhEVM
+
+The project supports two modes of operation:
+
+#### 🧪 Mock Mode (Local Development)
+
+**When to use:**
+- Local development and testing
+- Rapid iteration without network delays
+- No need for testnet tokens
+- Testing game logic without FHE complexity
+
+**How it works:**
+- Runs on local Hardhat network
+- FHE operations are simulated
+- Gateway callbacks are instant
+- No real encryption (plaintext operations)
+
+**Setup:**
+```bash
+# Leave GATEWAY_URL empty in .env or omit it
+GATEWAY_URL=
+
+# Start local node
+npm run node
+
+# Deploy (in another terminal)
+npm run deploy:local
+
+# Start relayer in mock mode
+npm run relayer
+```
+
+**Advantages:** ✅ Fast, free, no external dependencies
+**Limitations:** ⚠️ No real FHE privacy guarantees
+
+#### 🔐 Real fhEVM Mode (Production-like)
+
+**When to use:**
+- Testing real FHE encryption
+- Devnet/testnet deployment
+- Production deployment
+- End-to-end integration testing
+
+**How it works:**
+- Connects to Zama's fhEVM network
+- Real FHE encryption/decryption
+- Gateway performs actual decryption
+- Full privacy guarantees
+
+**Setup:**
+```bash
+# Set GATEWAY_URL in .env
+GATEWAY_URL=https://gateway.devnet.zama.ai
+ZAMA_DEVNET_RPC_URL=https://devnet.zama.ai
+
+# Get testnet tokens from faucet
+# Visit: https://faucet.zama.ai
+
+# Deploy to devnet
+npm run deploy:zama
+
+# Start relayer with real FHE
+export GAME_CONTRACT_ADDRESS=0x... # from deployment
+npm run relayer
+```
+
+**Advantages:** ✅ Real privacy, production-ready
+**Limitations:** ⚠️ Slower, requires testnet tokens, network dependency
+
+**Quick Comparison:**
+
+| Feature | Mock Mode | Real fhEVM Mode |
+|---------|-----------|-----------------|
+| Network | Local Hardhat | Zama Devnet/Mainnet |
+| FHE Encryption | Simulated | Real |
+| Gateway | Not required | Required |
+| Speed | Fast (instant) | Slower (async callbacks) |
+| Cost | Free | Gas fees |
+| Privacy | None | Full FHE privacy |
+| Use Case | Development/Testing | Production |
 
 ## 🚀 Quick Start
 
@@ -95,6 +219,250 @@ The relayer monitors rooms and starts games automatically:
 ```bash
 npm run relayer
 ```
+
+## 🤖 Running the Relayer
+
+The relayer is a critical service that manages game operations. It automatically:
+- Monitors room creation and player joins
+- Starts games when 2+ players are ready
+- Generates and encrypts random words
+- Forces round completion on timeouts
+
+### Prerequisites
+
+Before running the relayer, ensure you have:
+
+1. **Deployed Contract**
+   ```bash
+   # Deploy first
+   npm run deploy:local  # or deploy:zama
+
+   # Copy the contract address from output
+   ```
+
+2. **Environment Variables**
+   ```bash
+   # Set in .env or export
+   export GAME_CONTRACT_ADDRESS=0x...  # From deployment
+   export GATEWAY_URL=https://gateway.devnet.zama.ai  # Omit for mock mode
+   ```
+
+3. **Private Key**
+   - Relayer needs a funded account to submit transactions
+   - Set `PRIVATE_KEY` or `MNEMONIC` in `.env`
+   - Account needs native tokens for gas fees
+
+### Starting the Relayer
+
+#### Local Development (Mock Mode)
+
+```bash
+# Terminal 1: Start Hardhat node
+npm run node
+
+# Terminal 2: Deploy contract
+npm run deploy:local
+# Copy contract address: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+
+# Terminal 3: Start relayer
+export GAME_CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+npm run relayer
+```
+
+**Expected Output:**
+```
+🔧 Initializing relayer...
+🔐 Initializing FHE instance...
+⚠️  Continuing without FHE (for local testing)
+✅ Relayer initialized
+🎮 Monitoring rooms for game start...
+```
+
+#### Zama Devnet (Real FHE Mode)
+
+```bash
+# 1. Ensure environment is configured
+cat .env
+# Should contain:
+# GATEWAY_URL=https://gateway.devnet.zama.ai
+# ZAMA_DEVNET_RPC_URL=https://devnet.zama.ai
+# PRIVATE_KEY=0x...
+
+# 2. Deploy to devnet
+npm run deploy:zama
+# Copy contract address
+
+# 3. Start relayer
+export GAME_CONTRACT_ADDRESS=0x...
+npm run relayer
+```
+
+**Expected Output:**
+```
+🔧 Initializing relayer...
+🔐 Initializing FHE instance...
+✅ FHE instance initialized
+✅ Relayer initialized
+🎮 Monitoring rooms for game start...
+```
+
+### Relayer Monitoring
+
+The relayer will log events in real-time:
+
+```bash
+📥 Event: RoomCreated
+   Room ID: 1
+   Creator: 0x1234...
+   Timestamp: 2024-01-15T10:30:00.000Z
+
+👥 Event: PlayerJoined
+   Room ID: 1
+   Player: 0x5678...
+   Name: Alice
+
+🎮 Starting game for room 1...
+   Players: 2
+   Word length: 3
+   Encrypted word: CAT
+
+✅ Game started!
+   Room ID: 1
+   Game ID: 1
+   TX: 0xabcd...
+```
+
+### Troubleshooting
+
+#### Problem: "Failed to initialize FHE instance"
+
+**Solution:**
+- Check `GATEWAY_URL` is correct
+- For local testing, omit `GATEWAY_URL` (relayer will use mock mode)
+- Verify network connectivity to Gateway
+
+#### Problem: "Insufficient funds for gas"
+
+**Solution:**
+```bash
+# Check relayer account balance
+npx hardhat run scripts/check-balance.js --network zamaDevnet
+
+# Get testnet tokens
+# Visit: https://faucet.zama.ai
+```
+
+#### Problem: "Contract not deployed at address"
+
+**Solution:**
+```bash
+# Verify contract address
+export GAME_CONTRACT_ADDRESS=0x...  # Check this is correct
+
+# Verify on correct network
+npm run deploy:zama  # Re-deploy if needed
+```
+
+#### Problem: "Relayer not starting games"
+
+**Check:**
+1. Are there 2+ players in the room?
+2. Have players deposited balances?
+3. Is relayer address authorized in contract?
+
+```bash
+# Check relayer address
+npx hardhat console --network zamaDevnet
+> const contract = await ethers.getContractAt("ConfidentialWordGame", "0x...")
+> await contract.relayer()
+# Should match your relayer account address
+```
+
+#### Problem: "Transaction reverted"
+
+**Common causes:**
+- Player has insufficient encrypted balance
+- Room already has active game
+- Word length out of range (must be 3-5)
+- Network gas price spike
+
+**Debug:**
+```bash
+# Enable verbose logging
+DEBUG=* npm run relayer
+
+# Check recent transactions
+# View on block explorer: https://explorer.zama.ai
+```
+
+### Advanced Configuration
+
+#### Custom Word Pools
+
+Edit `scripts/relayer.js` to customize word lists:
+
+```javascript
+this.wordPools = {
+  3: ["CAT", "DOG", "BAT", ...],  // Add your 3-letter words
+  4: ["WORD", "GAME", ...],        // Add your 4-letter words
+  5: ["HOUSE", "MOUSE", ...],      // Add your 5-letter words
+};
+```
+
+#### Adjust Monitoring Interval
+
+```javascript
+// In relayer.js
+const POLL_INTERVAL = 5000; // ms between checks (default: 5s)
+```
+
+#### Multiple Relayers
+
+For high availability, run multiple relayer instances:
+
+```bash
+# Relayer 1
+PRIVATE_KEY=0x111... npm run relayer
+
+# Relayer 2 (different account)
+PRIVATE_KEY=0x222... npm run relayer
+```
+
+**Note:** Only one relayer should be authorized in the contract at a time. Use the two-step transfer process to change relayers safely.
+
+### Production Deployment
+
+For production, consider:
+
+1. **Process Manager**
+   ```bash
+   # Use PM2 for auto-restart
+   npm install -g pm2
+   pm2 start scripts/relayer.js --name word-game-relayer
+   pm2 save
+   pm2 startup
+   ```
+
+2. **Monitoring & Alerts**
+   - Set up health check endpoints
+   - Monitor relayer account balance
+   - Alert on transaction failures
+   - Track game start latency
+
+3. **Security**
+   - Use hardware wallet or HSM for relayer key
+   - Rotate keys periodically
+   - Implement rate limiting
+   - Monitor for suspicious activity
+
+4. **Two-Step Relayer Transfer**
+   ```solidity
+   // Step 1: Propose new relayer (requires owner)
+   await contract.proposeRelayer(newRelayerAddress);
+
+   // Step 2: Wait 24 hours, then accept (requires new relayer)
+   await contract.connect(newRelayer).acceptRelayer();
+   ```
 
 ## 🏗️ Project Structure
 

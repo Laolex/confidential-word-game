@@ -31,6 +31,7 @@ contract ConfidentialWordGame is GatewayCaller, Ownable, ReentrancyGuard {
     // ============ Constants ============
 
     uint8 public constant MAX_PLAYERS_PER_ROOM = 5;
+    uint8 public constant MAX_QUALIFIED_PLAYERS = 10; // Prevent DOS via unbounded array growth
     uint8 public constant INITIAL_WORD_LENGTH = 3;
     uint8 public constant MAX_WORD_LENGTH = 5;
     uint8 public constant MAX_ATTEMPTS_PER_ROUND = 2;
@@ -39,6 +40,7 @@ contract ConfidentialWordGame is GatewayCaller, Ownable, ReentrancyGuard {
     uint256 public constant ENTRY_FEE = 10 ether;
     uint256 public constant ROUND_TIME_LIMIT = 60; // seconds
     uint256 public constant GATEWAY_CALLBACK_TIMEOUT = 100; // blocks
+    uint256 public constant RELAYER_TRANSFER_DELAY = 24 hours; // Delay for relayer transfer
 
     // Prize distribution percentages (basis points, 10000 = 100%)
     uint256 public constant WINNER_SHARE = 7000; // 70%
@@ -50,6 +52,8 @@ contract ConfidentialWordGame is GatewayCaller, Ownable, ReentrancyGuard {
     uint256 public roomCounter;
     uint256 public gameCounter;
     address public relayer; // Trusted relayer for word generation
+    address public pendingRelayer; // Pending relayer for two-step transfer
+    uint256 public relayerProposalTime; // Timestamp of relayer proposal
 
     // ============ Structs ============
 
@@ -197,6 +201,21 @@ contract ConfidentialWordGame is GatewayCaller, Ownable, ReentrancyGuard {
         string reason
     );
 
+    event RelayerProposed(
+        address indexed currentRelayer,
+        address indexed proposedRelayer,
+        uint256 effectiveTime
+    );
+
+    event RelayerAccepted(
+        address indexed previousRelayer,
+        address indexed newRelayer
+    );
+
+    event RelayerTransferCanceled(
+        address indexed canceledRelayer
+    );
+
     // ============ Modifiers ============
 
     modifier onlyRelayer() {
@@ -246,7 +265,7 @@ contract ConfidentialWordGame is GatewayCaller, Ownable, ReentrancyGuard {
     function depositBalance(
         einput encryptedAmount,
         bytes calldata inputProof
-    ) external {
+    ) external nonReentrant {
         euint32 amount = TFHE.asEuint32(encryptedAmount, inputProof);
 
         if (hasBalance[msg.sender]) {
@@ -314,7 +333,7 @@ contract ConfidentialWordGame is GatewayCaller, Ownable, ReentrancyGuard {
     function callbackBalanceDecryption(
         uint256 requestId,
         uint32 decryptedBalance
-    ) public onlyGateway returns (bool) {
+    ) public onlyGateway nonReentrant returns (bool) {
         BalanceUpdate memory update = pendingBalanceChecks[requestId];
 
         // Emit event with decrypted balance for client
@@ -627,6 +646,7 @@ contract ConfidentialWordGame is GatewayCaller, Ownable, ReentrancyGuard {
     )
         public
         onlyGateway
+        nonReentrant
         returns (bool)
     {
         GuessRequest memory request = pendingGuessRequests[requestId];
@@ -638,6 +658,12 @@ contract ConfidentialWordGame is GatewayCaller, Ownable, ReentrancyGuard {
             player.isCorrect = true;
             player.score++;
             player.roundsWon++;
+
+            // Prevent DOS via unbounded array growth
+            require(
+                game.qualifiedPlayerCount < MAX_QUALIFIED_PLAYERS,
+                "Max qualified players reached"
+            );
 
             game.qualifiedPlayerCount++;
             game.qualifiedPlayers.push(request.player);
@@ -816,6 +842,7 @@ contract ConfidentialWordGame is GatewayCaller, Ownable, ReentrancyGuard {
     function forceCompleteRound(uint256 gameId)
         external
         onlyRelayer
+        nonReentrant
     {
         GameRound storage game = gameRounds[gameId];
         require(
@@ -937,7 +964,61 @@ contract ConfidentialWordGame is GatewayCaller, Ownable, ReentrancyGuard {
     // ============ Admin Functions ============
 
     /**
-     * @notice Update relayer address
+     * @notice Propose a new relayer (step 1 of two-step transfer)
+     * @param newRelayer Address of the proposed relayer
+     * @dev Initiates a time-delayed transfer to prevent accidental changes
+     */
+    function proposeRelayer(address newRelayer) external onlyOwner {
+        require(newRelayer != address(0), "Invalid address");
+        require(newRelayer != relayer, "Already current relayer");
+
+        pendingRelayer = newRelayer;
+        relayerProposalTime = block.timestamp;
+
+        emit RelayerProposed(
+            relayer,
+            newRelayer,
+            block.timestamp + RELAYER_TRANSFER_DELAY
+        );
+    }
+
+    /**
+     * @notice Accept relayer role (step 2 of two-step transfer)
+     * @dev Can only be called by the pending relayer after the delay period
+     */
+    function acceptRelayer() external {
+        require(msg.sender == pendingRelayer, "Not pending relayer");
+        require(pendingRelayer != address(0), "No pending relayer");
+        require(
+            block.timestamp >= relayerProposalTime + RELAYER_TRANSFER_DELAY,
+            "Transfer delay not met"
+        );
+
+        address oldRelayer = relayer;
+        relayer = pendingRelayer;
+        pendingRelayer = address(0);
+        relayerProposalTime = 0;
+
+        emit RelayerAccepted(oldRelayer, relayer);
+    }
+
+    /**
+     * @notice Cancel pending relayer transfer
+     * @dev Can be called by owner to cancel a proposed transfer
+     */
+    function cancelRelayerTransfer() external onlyOwner {
+        require(pendingRelayer != address(0), "No pending transfer");
+
+        address canceled = pendingRelayer;
+        pendingRelayer = address(0);
+        relayerProposalTime = 0;
+
+        emit RelayerTransferCanceled(canceled);
+    }
+
+    /**
+     * @notice Update relayer address (DEPRECATED - use proposeRelayer/acceptRelayer)
+     * @dev Kept for emergency use by owner, but two-step transfer is preferred
      */
     function setRelayer(address newRelayer) external onlyOwner {
         require(newRelayer != address(0), "Invalid address");

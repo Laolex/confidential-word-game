@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  # Hardhat Node - Local Ethereum development network
+  hardhat-node:
+    image: node:18-alpine
+    container_name: confidential-game-hardhat
+    working_dir: /app
+    command: npx hardhat node --hostname 0.0.0.0
+    ports:
+      - "8545:8545"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    networks:
+      - game-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8545"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Mock Gateway - Simulates FHE Gateway for local testing
+  mock-gateway:
+    build:
+      context: ./docker/mock-gateway
+      dockerfile: Dockerfile
+    container_name: confidential-game-gateway
+    ports:
+      - "7077:7077"
+    environment:
+      - PORT=7077
+      - NODE_ENV=development
+      - DEBUG=gateway:*
+    networks:
+      - game-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7077/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      hardhat-node:
+        condition: service_healthy
+
+  # Contract Deployer - Deploys contracts once network is ready
+  deployer:
+    image: node:18-alpine
+    container_name: confidential-game-deployer
+    working_dir: /app
+    command: sh -c "sleep 5 && npm run deploy:local"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    networks:
+      - game-network
+    depends_on:
+      hardhat-node:
+        condition: service_healthy
+      mock-gateway:
+        condition: service_healthy
+
+  # Relayer - Manages game operations
+  relayer:
+    image: node:18-alpine
+    container_name: confidential-game-relayer
+    working_dir: /app
+    command: sh -c "sleep 15 && node scripts/relayer.js"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - GATEWAY_URL=http://mock-gateway:7077
+    networks:
+      - game-network
+    depends_on:
+      - deployer
+    restart: unless-stopped
+
+networks:
+  game-network:
+    driver: bridge
+
+volumes:
+  node_modules:

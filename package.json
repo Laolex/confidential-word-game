@@ -17,7 +17,18 @@
     "verify:sepolia": "hardhat verify --network sepolia",
     "prettier": "prettier --write 'contracts/**/*.sol' 'test/**/*.js' 'scripts/**/*.js'",
     "lint": "solhint 'contracts/**/*.sol'",
-    "lint:fix": "solhint 'contracts/**/*.sol' --fix"
+    "lint:fix": "solhint 'contracts/**/*.sol' --fix",
+    "docker:up": "docker-compose up",
+    "docker:up:detached": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:down:volumes": "docker-compose down -v",
+    "docker:logs": "docker-compose logs -f",
+    "docker:logs:relayer": "docker-compose logs -f relayer",
+    "docker:logs:gateway": "docker-compose logs -f mock-gateway",
+    "docker:restart": "docker-compose restart",
+    "docker:ps": "docker-compose ps",
+    "events:listen": "node scripts/event-listener.js",
+    "events:monitor": "node scripts/monitor-game.js"
   },
   "keywords": [
     "fhe",
