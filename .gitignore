@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Hardhat
+cache/
+artifacts/
+typechain-types/
+coverage/
+coverage.json
+*.log
+
+# Build outputs
+dist/
+build/
+
+# Deployment artifacts (keep structure, ignore sensitive data)
+deployments/*.json
+!deployments/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.nyc_output/
+test-results/
+
+# Gas reports
+gas-report.txt
+
+# Misc
+*.tgz
+.cache/
+temp/
+tmp/
