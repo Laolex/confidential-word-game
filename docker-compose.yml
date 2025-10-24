@@ -1,9 +1,7 @@
-version: '3.8'
-
 services:
   # Hardhat Node - Local Ethereum development network
   hardhat-node:
-    image: node:18-alpine
+    image: node:20-alpine
     container_name: confidential-game-hardhat
     working_dir: /app
     command: npx hardhat node --hostname 0.0.0.0
@@ -11,16 +9,10 @@ services:
       - "8545:8545"
     volumes:
       - .:/app
-      - /app/node_modules
     environment:
       - NODE_ENV=development
     networks:
       - game-network
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8545"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
 
   # Mock Gateway - Simulates FHE Gateway for local testing
   mock-gateway:
@@ -36,46 +28,37 @@ services:
       - DEBUG=gateway:*
     networks:
       - game-network
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7077/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
     depends_on:
-      hardhat-node:
-        condition: service_healthy
+      - hardhat-node
 
   # Contract Deployer - Deploys contracts once network is ready
   deployer:
-    image: node:18-alpine
+    image: node:20-alpine
     container_name: confidential-game-deployer
     working_dir: /app
-    command: sh -c "sleep 5 && npm run deploy:local"
+    command: sh -c "sleep 15 && npm run deploy:local"
     volumes:
       - .:/app
-      - /app/node_modules
     environment:
       - NODE_ENV=development
     networks:
       - game-network
     depends_on:
-      hardhat-node:
-        condition: service_healthy
-      mock-gateway:
-        condition: service_healthy
+      - hardhat-node
+      - mock-gateway
 
   # Relayer - Manages game operations
   relayer:
-    image: node:18-alpine
+    image: node:20-alpine
     container_name: confidential-game-relayer
     working_dir: /app
-    command: sh -c "sleep 15 && node scripts/relayer.js"
+    command: sh -c "sleep 25 && node scripts/relayer.js"
     volumes:
       - .:/app
-      - /app/node_modules
     environment:
       - NODE_ENV=development
       - GATEWAY_URL=http://mock-gateway:7077
+      - GAME_CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
     networks:
       - game-network
     depends_on:
@@ -85,6 +68,3 @@ services:
 networks:
   game-network:
     driver: bridge
-
-volumes:
-  node_modules:

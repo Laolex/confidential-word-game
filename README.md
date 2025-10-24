@@ -157,6 +157,25 @@ npm run relayer
 
 ## 🚀 Quick Start
 
+### Full Stack Setup (Frontend + Backend)
+
+```bash
+# One-command setup
+npm run setup
+
+# Start backend with Docker
+npm run docker:up
+
+# In another terminal, start frontend
+npm run frontend:dev
+```
+
+Visit `http://localhost:3000` and connect your MetaMask wallet!
+
+📖 **Detailed frontend setup**: See [FRONTEND_SETUP.md](./FRONTEND_SETUP.md)
+
+### Backend Only Setup
+
 ### 1. Installation
 
 ```bash

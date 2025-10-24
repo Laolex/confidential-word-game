@@ -28,7 +28,14 @@
     "docker:restart": "docker-compose restart",
     "docker:ps": "docker-compose ps",
     "events:listen": "node scripts/event-listener.js",
-    "events:monitor": "node scripts/monitor-game.js"
+    "events:monitor": "node scripts/monitor-game.js",
+    "frontend:install": "cd frontend && npm install",
+    "frontend:dev": "cd frontend && npm run dev",
+    "frontend:build": "cd frontend && npm run build",
+    "frontend:preview": "cd frontend && npm run preview",
+    "copy-abi": "cp artifacts/contracts/ConfidentialWordGame.sol/ConfidentialWordGame.json frontend/src/contracts/",
+    "setup": "npm install && npm run frontend:install && npm run compile && npm run copy-abi",
+    "dev:all": "concurrently \"npm run node\" \"npm run relayer\" \"npm run frontend:dev\" \"npm run events:monitor\""
   },
   "keywords": [
     "fhe",
@@ -63,8 +70,10 @@
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.0",
+    "concurrently": "^8.2.2",
     "dotenv": "^16.3.1",
     "ethers": "^6.9.0",
+    "fhevm": "^0.6.2",
     "fhevmjs": "^0.5.0"
   },
   "engines": {
